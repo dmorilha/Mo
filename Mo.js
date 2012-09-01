@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 
 (function () {
-
-    var
-        buffer = require('buffer'),
+    var buffer = require('buffer'),
         fs = require('fs'),
         stream = require('stream'),
         util = require('util'),
@@ -12,15 +10,15 @@
         STATE = {
             ENTERING_INITIAL: 0x0,
             INITIAL: 0x1,
-            OPENING_CURLY_BRACKET: 0x2,
+            OPEN_CURLY_BRACKET: 0x2,
             ENTERING_EVALUATION: 0x3,
             EVALUATION: 0x4,
-            CLOSING_CURLY_BRACKET: 0x5
+            CLOSE_CURLY_BRACKET: 0x5
         },
 
         TOKEN = {
-            OPENING_CURLY_BRACKET: '{'.charCodeAt(0),
-            CLOSING_CURLY_BRACKET: '}'.charCodeAt(0)
+            OPEN_CURLY_BRACKET: '{'.charCodeAt(0),
+            CLOSE_CURLY_BRACKET: '}'.charCodeAt(0)
         };
 
     function MoParser() {
@@ -92,9 +90,9 @@
                         h = t2 = t1;
                         break;
 
-                    case STATE.OPENING_CURLY_BRACKET:
+                    case STATE.OPEN_CURLY_BRACKET:
 
-                        if (c === TOKEN.OPENING_CURLY_BRACKET) {
+                        if (c === TOKEN.OPEN_CURLY_BRACKET) {
 
                             t1++;
                             curlyBracketCounter++;
@@ -111,22 +109,22 @@
 
                     case STATE.EVALUATION:
 
-                        if (c === TOKEN.CLOSING_CURLY_BRACKET) {
+                        if (c === TOKEN.CLOSE_CURLY_BRACKET) {
                             t2 = t1 - 1;
-                            state = STATE.CLOSING_CURLY_BRACKET;
+                            state = STATE.CLOSE_CURLY_BRACKET;
 
                         } else {
                             t1++;
 
-                            if (c === TOKEN.OPENING_CURLY_BRACKET) {
+                            if (c === TOKEN.OPEN_CURLY_BRACKET) {
                                 curlyBracketCounter++;
                             }
 
                         }
 
-                    case STATE.CLOSING_CURLY_BRACKET:
+                    case STATE.CLOSE_CURLY_BRACKET:
 
-                        if (c === TOKEN.CLOSING_CURLY_BRACKET) {
+                        if (c === TOKEN.CLOSE_CURLY_BRACKET) {
 
                             t1++;
                             curlyBracketCounter--;
@@ -145,9 +143,9 @@
                         }
 
                     default:
-                        if (c === TOKEN.OPENING_CURLY_BRACKET) {
+                        if (c === TOKEN.OPEN_CURLY_BRACKET) {
                             t2 = t1;
-                            state = STATE.OPENING_CURLY_BRACKET;
+                            state = STATE.OPEN_CURLY_BRACKET;
 
                         } else {
                             t1++;
@@ -162,7 +160,7 @@
                 case STATE.ENTERING_INITIAL:
                     self.emit('data', {
                         type: 'evaluation',
-                        data: b.slice(h, t2).toString('utf-8')
+                        data: b.slice(h, t1).toString('utf-8')
                     });
 
                     h = t2 = t1;
@@ -172,7 +170,7 @@
                 case STATE.ENTERING_EVALUATION:
                     self.emit('data', {
                         type: 'initial',
-                        data: b.slice(h, t2).toString('utf-8')
+                        data: b.slice(h, t1).toString('utf-8')
                     });
 
                     h = t2 = t1;
@@ -182,7 +180,7 @@
                 case STATE.INITIAL:
                     self.emit('data', {
                         type: 'initial',
-                        data: b.slice(h, t2).toString('utf-8')
+                        data: b.slice(h, t1).toString('utf-8')
                     });
 
                     h = t2 = t1;
@@ -201,14 +199,31 @@
     function Mo () {
     }
 
+    function tab(n) {
+        var spaces = [],
+            i;
+
+        for (i = n * 4; i > 0; i--) {
+            spaces.push(' ');
+        }
+
+        return spaces.join('');
+    }
+
     Mo.prototype = {
+
+        parseString: function (s) {
+            return s.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/'/g, '\\\'');
+        },
+
         compile: function (file, cb) {
-            var readableStream = fs.createReadStream(file);
+            var readableStream = fs.createReadStream(file),
+                self = this;
 
             readableStream.on('open', function () {
                 var moParser = new MoParser(),
-                    t = 0,
-                    lines = [];
+                    lines = [],
+                    t = 0;
 
                 lines.push('var buffer = new Buffer(total);');
                 lines.push('var string;');
@@ -230,7 +245,7 @@
                             s = o.data.toString();
                             l = s.length;
                             t += l;
-                            lines.push('buffer.write(\'' + s + '\', i);');
+                            lines.push('buffer.write(\'' + self.parseString(s) + '\', i);');
                             lines.push('i += ' + l.toString() + ';');
                         }
 
@@ -247,15 +262,15 @@
 
                             lines.push('');
                             lines.push('if (' + b.join(' && ') + ') {');
-                            lines.push('string = ' + b[b.length - 1] + '.toString();');
-                            lines.push('stringLength = string.length;');
-                            lines.push('if (stringLength > left) {');
-                            lines.push('left = resize(buffer, stringLength - left);');
-                            lines.push('} else {');
-                            lines.push('left -= stringLength;');
-                            lines.push('}');
-                            lines.push('buffer.write(string, i);');
-                            lines.push('i += stringLength;');
+                            lines.push(tab(1) + 'string = ' + b[b.length - 1] + '.toString();');
+                            lines.push(tab(1) + 'stringLength = string.length;');
+                            lines.push(tab(1) + 'if (stringLength > left) {');
+                            lines.push(tab(2) + 'left = resize(buffer, stringLength - left);');
+                            lines.push(tab(1) + '} else {');
+                            lines.push(tab(2) + 'left -= stringLength;');
+                            lines.push(tab(1) + '}');
+                            lines.push(tab(1) + 'buffer.write(string, i);');
+                            lines.push(tab(1) + 'i += stringLength;');
                             lines.push('}');
                             lines.push('');
                         }
@@ -295,7 +310,8 @@
     };
 
     (new Mo).compile('./template', function (o) {
-        var script;
+        var i,
+            script;
 
         function resize(buffer, size) {
             var b,
@@ -318,27 +334,31 @@
             buffer.copy(b, r);
         }
 
-        console.log(o.code);
+        console.error(o.code);
 
         script = require('vm').createScript(o.code)
 
-        script.runInNewContext({
-            Buffer: Buffer,
+        for (i = 0; i < 1; i++) {
+            script.runInNewContext({
+                Buffer: Buffer,
 
-            console: console,
+                //console: console,
 
-            input: {
-                abc: 'Daniel',
-                def: 'Vitor',
-                ghi: 'Morilha'
-            },
+                input: {
+                    a: {
+                        a: 'foo',
+                        b: 'bar',
+                        c: 'baz'
+                    },
+                    b: 'foz'
+                },
 
-            output: function (b) {
-                console.log(b.toString('utf-8'));
-            },
+                output: function (b) {
+                    console.log(b.toString('utf-8'));
+                },
 
-            resize: resize
-        });
-
+                resize: resize
+            });
+        }
     });
 }());
