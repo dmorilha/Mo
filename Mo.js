@@ -311,6 +311,7 @@
 
     (new Mo).compile('./template', function (o) {
         var i,
+            context,
             script;
 
         function resize(buffer, size) {
@@ -336,29 +337,29 @@
 
         console.error(o.code);
 
-        script = require('vm').createScript(o.code)
+        script = vm.createScript(o.code);
+
+        context = vm.createContext({
+            Buffer: Buffer,
+
+            input: {
+                a: {
+                    a: 'foo',
+                    b: 'bar',
+                    c: 'baz'
+                },
+                b: 'foz'
+            },
+
+            output: function (b) {
+                console.log(b.toString('utf-8'));
+            },
+
+            resize: resize
+        });
 
         for (i = 0; i < 1000; i++) {
-            script.runInNewContext({
-                Buffer: Buffer,
-
-                //console: console,
-
-                input: {
-                    a: {
-                        a: 'foo',
-                        b: 'bar',
-                        c: 'baz'
-                    },
-                    b: 'foz'
-                },
-
-                output: function (b) {
-                    console.log(b.toString('utf-8'));
-                },
-
-                resize: resize
-            });
+            script.runInNewContext(context);
         }
     });
 }());
