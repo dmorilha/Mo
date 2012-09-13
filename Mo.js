@@ -338,7 +338,7 @@
 
         script = require('vm').createScript(o.code)
 
-        for (i = 0; i < 1; i++) {
+        for (i = 0; i < 1000; i++) {
             script.runInNewContext({
                 Buffer: Buffer,
 
