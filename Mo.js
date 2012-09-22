@@ -280,6 +280,7 @@
     (new Mo).compile('./template', function (o) {
         var c,
             i,
+            y,
             z;
 
         c = 'assignTemplate(' + o.code + ');';
@@ -290,14 +291,17 @@
             }
         });
 
+        y = {
+            a: {
+                a: 'foo',
+                b: 'bar',
+                c: 'baz'
+            },
+            b: 'foz'
+        };
+
         for (i = 0; i < 1000; i++) {
-            console.log(z({a: {
-                    a: 'foo',
-                    b: 'bar',
-                    c: 'baz'
-                },
-                b: 'foz'
-            }));
+            z(y);
         }
     });
 }());
