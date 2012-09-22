@@ -226,7 +226,7 @@
                     t = 0;
 
                 lines.push('function (i) {');
-                lines.push(tab(1) + 'var lines = [];');
+                lines.push(tab(1) + 'var l = [];');
                 lines.push('');
 
                 moParser.on('data', function (o) {
@@ -238,7 +238,7 @@
 
                     case 'initial':
                         if (o.data) {
-                            lines.push(tab(1) + 'lines.push(\'' + self.parseString(o.data.toString()) + '\');');
+                            lines.push(tab(1) + 'l.push(\'' + self.parseString(o.data.toString()) + '\');');
                             lines.push('');
                         }
 
@@ -254,7 +254,7 @@
                             }
 
                             lines.push(tab(1) + 'if (' + b.join(' && ') + ') {');
-                            lines.push(tab(2) + 'l.push(' + b[l - 1] + '.toString());');
+                            lines.push(tab(2) + 'l.push(' + b[l - 2] + '.toString());');
                             lines.push(tab(1) + '}');
                             lines.push('');
                         }
@@ -264,7 +264,7 @@
                 });
 
                 moParser.on('end', function () {
-                    lines.push(tab(1) + 'output(buffer.slice(0, i));');
+                    lines.push(tab(1) + 'return l.join(\'\');');
                     lines.push('}');
 
                     cb({
@@ -291,7 +291,7 @@
         });
 
         for (i = 0; i < 1000; i++) {
-            console.log(({a: {
+            console.log(z({a: {
                     a: 'foo',
                     b: 'bar',
                     c: 'baz'
