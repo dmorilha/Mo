@@ -232,6 +232,7 @@
                 moParser.on('data', function (o) {
                     var a = [],
                         b = [],
+                        c,
                         l;
 
                     switch (o.type) {
@@ -253,8 +254,14 @@
                                 b.push(a.slice(0, i).join('.'));
                             }
 
+                            c = b[l - 2];
+
                             lines.push(tab(1) + 'if (' + b.join(' && ') + ') {');
-                            lines.push(tab(2) + 'l.push(' + b[l - 1] + '.toString());');
+                            lines.push(tab(2) + 'if (' + c + ' instanceof Array) {');
+                            lines.push(tab(3) + 'l = l.concat(' + c + ');');
+                            lines.push(tab(2) + '} else {');
+                            lines.push(tab(3) + 'l.push(' + c + '.toString());');
+                            lines.push(tab(2) + '}');
                             lines.push(tab(1) + '}');
                             lines.push('');
                         }
@@ -264,7 +271,7 @@
                 });
 
                 moParser.on('end', function () {
-                    lines.push(tab(1) + 'output(buffer.slice(0, i));');
+                    lines.push(tab(1) + 'return l;');
                     lines.push('}');
 
                     cb({
@@ -282,6 +289,7 @@
             i,
             z;
 
+
         c = 'assignTemplate(' + o.code + ');';
 
         vm.runInNewContext(c, {
@@ -290,14 +298,17 @@
             }
         });
 
-        for (i = 0; i < 1000; i++) {
-            console.log(({a: {
-                    a: 'foo',
-                    b: 'bar',
-                    c: 'baz'
-                },
-                b: 'foz'
-            }));
+        y = {
+            a: {
+                a: 'foo',
+                b: 'bar',
+                c: 'baz'
+            },
+            b: 'foz'
+        };
+
+        for (i = 0; i < 1000000; i++) {
+            z(y).join('');
         }
     });
 }());
