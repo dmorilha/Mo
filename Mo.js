@@ -226,7 +226,7 @@
                     t = 0;
 
                 lines.push('function (i) {');
-                lines.push(tab(1) + 'var lines = [];');
+                lines.push(tab(1) + 'var l = [];');
                 lines.push('');
 
                 moParser.on('data', function (o) {
@@ -239,7 +239,7 @@
 
                     case 'initial':
                         if (o.data) {
-                            lines.push(tab(1) + 'lines.push(\'' + self.parseString(o.data.toString()) + '\');');
+                            lines.push(tab(1) + 'l.push(\'' + self.parseString(o.data.toString()) + '\');');
                             lines.push('');
                         }
 
