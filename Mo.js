@@ -310,5 +310,7 @@
         for (i = 0; i < 1000000; i++) {
             z(y).join('');
         }
+
+        console.log(z(y).join(''));
     });
 }());
