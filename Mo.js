@@ -196,6 +196,27 @@
         this.emit('end', {});
     };
 
+    function MoFunctionParser() {
+        this._on = {
+            data: []
+        };
+
+        this._state = STATE.ENTERING_INITIAL;
+    }
+
+    MoFunctionParser.prototype = {
+        on: function (e, cb) {
+            switch (e) {
+            case 'data':
+                this._on.data.push(cb);
+                break;
+            }
+        },
+
+        parse: function (s) {
+        }
+    };
+
     function Mo () {
     }
 
@@ -222,12 +243,14 @@
 
             readableStream.on('open', function () {
                 var moParser = new MoParser(),
+                    keys = [],
+                    line = [],
                     lines = [],
                     t = 0;
 
-                lines.push('function (i) {');
-                lines.push(tab(1) + 'var l = [];');
-                lines.push('');
+                lines.push('(function () {');
+                lines.push('return {');
+                lines.push(tab(1) + 'expand: function (i) {');
 
                 moParser.on('data', function (o) {
                     var a = [],
@@ -239,31 +262,15 @@
 
                     case 'initial':
                         if (o.data) {
-                            lines.push(tab(1) + 'l.push(\'' + self.parseString(o.data.toString()) + '\');');
-                            lines.push('');
+                            line.push("'" + self.parseString(o.data.toString()) + "'");
                         }
 
                         break;
 
                     case 'evaluation':
                         if (o.data) {
-                            a = o.data.split('.');
-                            a.unshift('i');
-
-                            for (i = 2, l = a.length; i <= l; i++) {
-                                b.push(a.slice(0, i).join('.'));
-                            }
-
-                            c = b[l - 2];
-
-                            lines.push(tab(1) + 'if (' + b.join(' && ') + ') {');
-                            lines.push(tab(2) + 'if (' + c + ' instanceof Array) {');
-                            lines.push(tab(3) + 'l = l.concat(' + c + ');');
-                            lines.push(tab(2) + '} else {');
-                            lines.push(tab(3) + 'l.push(' + c + '.toString());');
-                            lines.push(tab(2) + '}');
-                            lines.push(tab(1) + '}');
-                            lines.push('');
+                            keys.push(o.data);
+                            line.push('i.' + o.data + '.toString()');
                         }
 
                         break;
@@ -271,8 +278,12 @@
                 });
 
                 moParser.on('end', function () {
-                    lines.push(tab(1) + 'return l;');
-                    lines.push('}');
+                    lines.push(tab(1) + 'return [' + line.join(', ') + '];');
+                    lines.push(tab(1) + '},');
+                    lines.push();
+                    lines.push(tab(1) + 'keys: ' + JSON.stringify(keys));
+                    lines.push('};');
+                    lines.push('})();');
 
                     cb({
                         code: lines.join('\n')
@@ -285,18 +296,10 @@
     };
 
     (new Mo).compile('./template', function (o) {
-        var c,
-            i,
+        var i,
             z;
 
-
-        c = 'assignTemplate(' + o.code + ');';
-
-        vm.runInNewContext(c, {
-            assignTemplate: function (f) {
-                z = f
-            }
-        });
+        z = vm.runInThisContext(o.code);
 
         y = {
             a: {
@@ -304,13 +307,16 @@
                 b: 'bar',
                 c: 'baz'
             },
-            b: 'foz'
+            b: 'foz',
+            c: ''
         };
 
+        console.error(z.expand.toString());
+
         for (i = 0; i < 1000000; i++) {
-            z(y).join('');
+            z.expand(y).join('');
         }
 
-        console.log(z(y).join(''));
+        console.log(z.expand(y).join(''));
     });
 }());
