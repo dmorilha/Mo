@@ -310,12 +310,10 @@
                         n = i;
 
                         this._identifier.join('').split('.').forEach(function (i) {
-                            if (n) {
-                                n = n[i];
-                            }
+                            n = n.hasOwnProperty(i) ? n[i] : undefined;
                         });
 
-                        if (!n) {
+                        if (n === undefined) {
                             if (this._string.length) {
                                 trigger(this, 'data', {
                                     data: this._string.join(''),
@@ -484,6 +482,13 @@
         z = vm.runInThisContext(o.code);
 
         y = {
+            a: {
+                a: 'foo',
+                b: 'bar',
+                c: 'baz'
+            },
+            b: 'foz',
+            c: null
         };
 
         m.compileString(z.expand, y, function (o) {
@@ -496,12 +501,6 @@
             console.error(z.expand.toString());
 
             y = {
-                a: {
-                    a: 'foo',
-                    b: 'bar',
-                    c: 'baz'
-                },
-                b: 'foz',
                 c: ''
             };
 
