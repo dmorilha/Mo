@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 (function () {
+    'use strict';
+
     var buffer = require('buffer'),
         fs = require('fs'),
         stream = require('stream'),
@@ -196,24 +198,151 @@
         this.emit('end', {});
     };
 
+    var FUNCTION_STATE = {
+        IGNORE: 0x0,
+        INITIAL: 0x1,
+        IDENTIFIER: 0x2,
+        STRING: 0x3,
+        STRING_ESCAPE: 0x4
+    };
+
     function MoFunctionParser() {
+        this._identifier = [];
+
         this._on = {
-            data: []
+            data: [],
+            end: []
         };
 
-        this._state = STATE.ENTERING_INITIAL;
+        this._state = FUNCTION_STATE.IGNORE;
+        this._string = [];
     }
 
     MoFunctionParser.prototype = {
         on: function (e, cb) {
+            //TODO: make sure cb is a function
             switch (e) {
             case 'data':
                 this._on.data.push(cb);
                 break;
+
+            case 'end':
+                this._on.end.push(cb);
+                break;
             }
         },
 
-        parse: function (s) {
+        parse: function (s, i) {
+            var n;
+
+            function trigger(o, e) {
+                var a = Array.prototype.slice.call(arguments, 2);
+
+                switch (e) {
+                case 'data':
+                case 'end':
+                    o._on[e].forEach(function (c) {
+                        c.apply(null, a);
+                    });
+                    break;
+                }
+            }
+
+            i = {
+                i: i
+            };
+
+            s.toString().split('').forEach(function (c) {
+                switch (this._state) {
+                case FUNCTION_STATE.IGNORE:
+                    if (c === '[') {
+                        this._state = FUNCTION_STATE.INITIAL;
+                    }
+                    break;
+
+                case FUNCTION_STATE.INITIAL:
+                    switch (c) {
+                    case "'":
+                        this._state = FUNCTION_STATE.STRING;
+                        break;
+
+                    case ']':
+                        if (this._string.length) {
+                            trigger(this, 'data', {
+                                data: this._string.join(''),
+                                type: 'initial'
+                            });
+
+                            this._string = [];
+                        }
+
+                        trigger(this, 'end');
+                        this._state = FUNCTION_STATE.IGNORE;
+                        break;
+
+                    case "i":
+                        this._state = FUNCTION_STATE.IDENTIFIER;
+                        this._identifier.push(c);
+                        break;
+                    }
+                    break;
+
+                case FUNCTION_STATE.STRING_ESCAPE:
+                    this._string.push(c);
+                    this._state = FUNCTION_STATE.STRING;
+                    break;
+
+                case FUNCTION_STATE.STRING:
+                    switch (c) {
+                    case "'":
+                        this._state = FUNCTION_STATE.INITIAL;
+                        return;
+
+                    case '\\':
+                        this._state = FUNCTION_STATE.STRING_ESCAPE;
+                        break;
+                    }
+                    this._string.push(c);
+                    break;
+
+                case FUNCTION_STATE.IDENTIFIER:
+                    if (c === ',') {
+                        n = i;
+
+                        this._identifier.join('').split('.').forEach(function (i) {
+                            if (n) {
+                                n = n[i];
+                            }
+                        });
+
+                        if (!n) {
+                            if (this._string.length) {
+                                trigger(this, 'data', {
+                                    data: this._string.join(''),
+                                    type: 'initial'
+                                });
+
+                                this._string = [];
+                            }
+
+                            trigger(this, 'data', {
+                                data: this._identifier.slice(2).join(''),
+                                type: 'evaluation'
+                            });
+
+                        } else {
+                            this._string.push(n);
+                        }
+
+                        this._identifier = [];
+                        this._state = FUNCTION_STATE.INITIAL;
+
+                    } else {
+                        this._identifier.push(c);
+                    }
+                    break;
+                }
+            }, this);
         }
     };
 
@@ -237,20 +366,65 @@
             return s.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/'/g, '\\\'');
         },
 
-        compile: function (file, cb) {
+        compileString: function (s, i, cb) {
+            var moParser = new MoFunctionParser(),
+                keys = [],
+                line = [];
+
+            moParser.on('data', function (o) {
+                var a = [],
+                    b = [],
+                    c,
+                    l;
+
+                switch (o.type) {
+
+                case 'initial':
+                    if (o.data) {
+                        line.push("'" + o.data.toString() + "'");
+                    }
+
+                    break;
+
+                case 'evaluation':
+                    if (o.data) {
+                        keys.push(o.data);
+                        line.push('i.' + o.data);
+                    }
+
+                    break;
+                }
+            });
+
+            moParser.on('end', function () {
+                var lines = [];
+
+                lines.push('(function () {');
+                lines.push('return {');
+                lines.push(tab(1) + 'expand: function (i) {');
+                lines.push(tab(1) + 'return [' + line.join(', ') + '];');
+                lines.push(tab(1) + '},');
+                lines.push();
+                lines.push(tab(1) + 'keys: ' + JSON.stringify(keys));
+                lines.push('};');
+                lines.push('})();');
+
+                cb({
+                    code: lines.join('\n')
+                });
+            });
+
+            moParser.parse(s, i);
+        },
+
+        compileFile: function (file, cb) {
             var readableStream = fs.createReadStream(file),
                 self = this;
 
             readableStream.on('open', function () {
                 var moParser = new MoParser(),
                     keys = [],
-                    line = [],
-                    lines = [],
-                    t = 0;
-
-                lines.push('(function () {');
-                lines.push('return {');
-                lines.push(tab(1) + 'expand: function (i) {');
+                    line = [];
 
                 moParser.on('data', function (o) {
                     var a = [],
@@ -270,7 +444,7 @@
                     case 'evaluation':
                         if (o.data) {
                             keys.push(o.data);
-                            line.push('i.' + o.data + '.toString()');
+                            line.push('i.' + o.data);
                         }
 
                         break;
@@ -278,6 +452,11 @@
                 });
 
                 moParser.on('end', function () {
+                    var lines = [];
+
+                    lines.push('(function () {');
+                    lines.push('return {');
+                    lines.push(tab(1) + 'expand: function (i) {');
                     lines.push(tab(1) + 'return [' + line.join(', ') + '];');
                     lines.push(tab(1) + '},');
                     lines.push();
@@ -295,28 +474,42 @@
         }
     };
 
-    (new Mo).compile('./template', function (o) {
+    var m = new Mo();
+
+    m.compileFile('./template', function (o) {
         var i,
+            y,
             z;
 
         z = vm.runInThisContext(o.code);
 
         y = {
-            a: {
-                a: 'foo',
-                b: 'bar',
-                c: 'baz'
-            },
-            b: 'foz',
-            c: ''
         };
 
-        console.error(z.expand.toString());
+        m.compileString(z.expand, y, function (o) {
+            var i,
+                y,
+                z;
 
-        for (i = 0; i < 1000000; i++) {
-            z.expand(y).join('');
-        }
+            z = vm.runInThisContext(o.code);
 
-        console.log(z.expand(y).join(''));
+            console.error(z.expand.toString());
+
+            y = {
+                a: {
+                    a: 'foo',
+                    b: 'bar',
+                    c: 'baz'
+                },
+                b: 'foz',
+                c: ''
+            };
+
+            for (i = 0; i < 1000000; i++) {
+                z.expand(y).join('');
+            }
+
+            console.log(z.expand(y).join(''));
+        });
     });
 }());
