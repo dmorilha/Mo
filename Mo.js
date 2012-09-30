@@ -270,7 +270,7 @@
                     case 'evaluation':
                         if (o.data) {
                             keys.push(o.data);
-                            line.push('i.' + o.data + '.toString()');
+                            line.push('i.' + o.data);
                         }
 
                         break;
